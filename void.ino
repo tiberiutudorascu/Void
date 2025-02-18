@@ -19,7 +19,10 @@ DHT dht(DHTPIN, DHTTYPE);
 
 // Array-uri care contin frame-urile pentru animatia "Void" si iconitele pentru barele de progres
 const unsigned char *frames[] = { happyidle1, happyidle2, happyidle3, happyidle4, happyidle5, happyidle2, happyidle3 };  // Frame-urile pentru Void
-const unsigned char *progicons[] = { ic1, ic2, ic3 };                                                                    // Frame-urile pentru iconitele de la barele de progres
+const unsigned char *progiconsSun[] = { infosun1, infosun2, infosun3 };
+const unsigned char *progiconsCold[] = { infocold1, infocold2, infocold3 };
+const unsigned char *progiconsHot[] = { infohot1, infohot2, infohot3 };
+const unsigned char *progiconsFreeze[] = { infofreeze1, infofreeze2, infofreeze3 };  // Frame-urile pentru iconitele de la barele de progres
 
 // Timpul de afisare (in milisecunde) pentru fiecare frame al animatiei "Void"
 const unsigned framestime[] = { 7000, 2000, 1000, 2000, 800, 2500, 3800 };
@@ -55,6 +58,8 @@ int totalPages = 3;
 int totalInfoPages = 5;
 // Numarul total de pagini pentru ecranul de informatii
 
+float temperature;
+
 void setup() {
   Serial.begin(9600);  // Initializare comunicatie seriala pentru debug
   dht.begin();
@@ -75,7 +80,7 @@ void setup() {
 
 void loop() {
   unsigned long currentMillis = millis();  // Obtinem timpul curent in milisecunde
-  float temperature = dht.readTemperature();
+  temperature = dht.readTemperature();
 
   // Gestionarea butonului de pe pin 4 pentru schimbarea paginilor
   if (digitalRead(4) == LOW && apasat && (currentMillis - lastButtonPress1 > debounceDelay)) {
@@ -165,11 +170,19 @@ void progress() {
   // Daca 300 ms au trecut, actualizam iconita animata si elementele grafice
   if (currentTime2 - previousTime2 >= 300) {
     previousTime2 = currentTime2;
-    display.drawBitmap(0, 0, progicons[currentFrame2], 128, 64, SSD1306_WHITE);
+    if (temperature >= 19 && temperature <= 27)
+      display.drawBitmap(0, 0, progiconsSun[currentFrame2], 128, 64, SSD1306_WHITE);
+    if (temperature >= 15 && temperature <= 18)
+      display.drawBitmap(0, 0, progiconsCold[currentFrame2], 128, 64, SSD1306_WHITE);
+   if (temperature >= -5 && temperature <= 14)
+      display.drawBitmap(0, 0, progiconsFreeze[currentFrame2], 128, 64, SSD1306_WHITE);
+    if (temperature >= 28 && temperature <= 40)
+      display.drawBitmap(0, 0, progiconsHot[currentFrame2], 128, 64, SSD1306_WHITE);
+
 
     // Deseneaza barele de progres folosind forme rotunjite
     display.drawRoundRect(5, 16, 10, 40, 10, SSD1306_WHITE);
-    //display.fillRoundRect(5, 46, 10, 40, 10, SSD1306_WHITE);
+    display.fillRoundRect(5, 46, 10, 10, 10, SSD1306_WHITE);
 
     display.drawRoundRect(25, 16, 10, 40, 10, SSD1306_WHITE);
     display.drawRoundRect(25, 16, 10, 40, 10, SSD1306_WHITE);
@@ -191,7 +204,14 @@ void progress() {
     display.drawRoundRect(45, 16, 10, 40, 10, SSD1306_WHITE);
     display.drawRoundRect(65, 16, 10, 40, 10, SSD1306_WHITE);
 
-    display.drawBitmap(0, 0, progicons[currentFrame2], 128, 64, SSD1306_WHITE);
+    if (temperature >= 19 && temperature <= 27)
+      display.drawBitmap(0, 0, progiconsSun[currentFrame2], 128, 64, SSD1306_WHITE);
+    if (temperature >= 15 && temperature <= 18)
+      display.drawBitmap(0, 0, progiconsCold[currentFrame2], 128, 64, SSD1306_WHITE);
+   if (temperature >= -5 && temperature <= 14)
+      display.drawBitmap(0, 0, progiconsFreeze[currentFrame2], 128, 64, SSD1306_WHITE);
+    if (temperature >= 28 && temperature <= 40)
+      display.drawBitmap(0, 0, progiconsHot[currentFrame2], 128, 64, SSD1306_WHITE);
   }
   display.display();  // Actualizeaza ecranul cu tot ce a fost desenat
 }
