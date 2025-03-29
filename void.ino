@@ -13,85 +13,68 @@
 #define DHTPIN 17      // Pinul la care este conectat senzorul DHT
 #define DHTTYPE DHT11  // Tipul senzorului DHT utilizat
 
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);  // Initializează obiectul display cu parametrii specificați
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+DHT dht(DHTPIN, DHTTYPE);
 
-DHT dht(DHTPIN, DHTTYPE);  // Inițializează obiectul DHT cu pinul și tipul senzorului
+int page = 0;
+int infoPage = 0;
 
+unsigned long lastButtonPress1 = 0;
+unsigned long lastButtonPress2 = 0;
+const unsigned long debounceDelay = 200;
+unsigned long lastTempCheck = 0;
+int buttonPressCount = 0;
 
-int page = 0;      // Variabilă pentru a urmări pagina curentă afișată
-int infoPage = 0;  // Variabilă pentru a urmări pagina de informații
+bool apasat = false;
+bool apasat2 = false;
+bool animatingcute = false;
+bool animatingidle = true;  // idle e activ initial
 
-unsigned long lastButtonPress1 = 0;       // Stochează momentul ultimei apăsări a primului buton (pentru schimbarea paginii)
-unsigned long lastButtonPress2 = 0;       // Stochează momentul ultimei apăsări a celui de-al doilea buton (pentru schimbarea modului de afișare)
-const unsigned long debounceDelay = 200;  // Timpul de așteptare pentru debounce-ul butoanelor (200 ms)
-unsigned long lastTempCheck = 0;    // Variabilă pentru a urmări momentul ultimei verificări a temperaturii
-int buttonPressCount = 0;      
+bool infoBool = false;
 
-bool apasat = false;   // Flag pentru debounce-ul primului buton
-bool apasat2 = false;  // Flag pentru debounce-ul celui de-al doilea buton
+int totalPages = 3;
+int totalInfoPages = 5;
 
-bool infoBool = false;  // Flag pentru a comuta între modurile de afișare (informații/statistici)
-
-int totalPages = 3;      // Numărul total de pagini pentru modul principal
-int totalInfoPages = 5;  // Numărul total de pagini pentru modul de informații
-
-float temperature;  // Variabilă pentru a stoca temperatura citită de la senzorul DHT
+float temperature;
+int healthpoints = 0;
 
 void setup() {
-  Serial.begin(9600);  // Inițializează comunicarea serială la 9600 baud
-  dht.begin();         // Inițializează senzorul DHT
+  Serial.begin(9600);
+  dht.begin();
   if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
-    Serial.println(F("Eroare la initializarea OLED!"));  // Afișează un mesaj de eroare dacă ecranul OLED nu se inițializează corect
-    for (;;)
-      ;  // Buclă infinită în caz de eroare la inițializare
+    Serial.println(F("Eroare la initializarea OLED!"));
+    for (;;);
   }
-
-  pinMode(4, INPUT_PULLUP);   // Configurarea pinului 4 ca intrare cu rezistență internă de pull-up
-  pinMode(16, INPUT_PULLUP);  // Configurarea pinului 16 ca intrare cu rezistență internă de pull-up
-
-  display.clearDisplay();  // Curăță ecranul OLED
-  display.display();       // Actualizează ecranul pentru a reflecta modificările
+  pinMode(4, INPUT_PULLUP);
+  pinMode(16, INPUT_PULLUP);
+  display.clearDisplay();
+  display.display();
 }
 
 void loop() {
-  unsigned long currentMillis = millis();  // Obține timpul curent în milisecunde de la pornirea programului
-  temperature = dht.readTemperature();     // Citește temperatura de la senzorul DHT
+  unsigned long currentMillis = millis();
+  temperature = dht.readTemperature();
 
-  // Verifică dacă primul buton este apăsat, flag-ul "apasat" este true și s-a respectat timpul de debounce
   if (digitalRead(4) == LOW && apasat && (currentMillis - lastButtonPress1 > debounceDelay)) {
-    apasat = false;                    // Resetează flag-ul de debounce pentru primul buton
-    lastButtonPress1 = currentMillis;  // Actualizează momentul ultimei apăsări a butonului
-    if (infoBool) {
-      infoPage++;  // Dacă suntem în modul informații, schimbă pagina de informații
-    } else
-      page++;  // Altfel, schimbă pagina principală
-    if (page > totalPages) {
-      page = 0;  // Resetează pagina dacă a depășit numărul total de pagini
-    }
-    if (infoPage > totalInfoPages) {
-      infoPage = 0;  // Resetează pagina de informații dacă a depășit numărul total de pagini
-    }
+    apasat = false;
+    lastButtonPress1 = currentMillis;
+    if (infoBool) infoPage++;
+    else page++;
+    if (page > totalPages) page = 0;
+    if (infoPage > totalInfoPages) infoPage = 0;
   }
-  // Resetează flag-ul pentru primul buton când acesta nu este apăsat
-  if (digitalRead(4) == HIGH) {
-    apasat = true;
-  }
-  // Dacă pagina curentă este 1, verifică al doilea buton pentru schimbarea modului de afișare (informații vs. progres)
+  if (digitalRead(4) == HIGH) apasat = true;
+
   if (page == 1 || page == 0) {
     if (digitalRead(16) == LOW && apasat2 && (currentMillis - lastButtonPress2 > debounceDelay)) {
-      apasat2 = false;       // Resetează flag-ul de debounce pentru al doilea buton
-      infoBool = !infoBool;  // Inversează starea lui infoBool pentru a comuta între moduri
-      if (!infoBool) {
-        previousTime2 = currentMillis;  // Resetează timpul pentru animația de progres dacă se iese din modul informații
-      }
-      lastButtonPress2 = currentMillis;  // Actualizează momentul ultimei apăsări a celui de-al doilea buton
+      apasat2 = false;
+      infoBool = !infoBool;
+      if (!infoBool) previousTime2 = currentMillis;
+      lastButtonPress2 = currentMillis;
     }
-    if (digitalRead(16) == HIGH) {
-      apasat2 = true;  // Setează flag-ul când butonul nu este apăsat
-    }
+    if (digitalRead(16) == HIGH) apasat2 = true;
   }
 
-  // Afișează pagina curentă în Serial Monitor când se schimbă
   static int lastPage = -1;
   if (page != lastPage) {
     Serial.print("Pagina curenta: ");
@@ -99,61 +82,66 @@ void loop() {
     lastPage = page;
   }
 
-  // Logica de afișare pentru fiecare pagină
   if (page == 0) {
-    idle();  // Afișează animația idle
-    if (infoBool) 
-      cute();
+    idle();
+    if (infoBool) cute(&healthpoints);
+  } else if (page == 1) {
+    if (infoBool) stats();
+    else progress();
+  } else if (page == 2 || page == 3) {
+    display.clearDisplay();
+    display.display();
   }
-else if (page == 1) {
-  if (infoBool)
-    stats();  // Afișează pagina de statistici/informații
-  else {
-    progress();  // Afișează animația de progres
+
+  if (currentMillis - lastTempCheck >= 10000) {
+    Serial.println(temperature);
+    lastTempCheck = currentMillis;
   }
-}
-else if (page == 2 || page == 3) {
-  display.clearDisplay();  // Curăță ecranul pentru paginile 2 și 3 (posibil pagini goale sau rezervate)
-  display.display();
-}
-// Actualizează temperatura în Serial Monitor la fiecare 10 secunde
-if (currentMillis - lastTempCheck >= 10000) {
-  Serial.println(temperature);
-  lastTempCheck = currentMillis;
-}
 }
 
 void idle() {
-  unsigned long currentTime = millis();  // Obține timpul curent în milisecunde
-
-  // Verifică dacă a trecut timpul necesar pentru a schimba cadrul curent
-  if (currentTime - previousTime >= framestime[currentFrame]) {
-    previousTime = currentTime;                                              // Actualizează timpul ultimei schimbări de cadru
-    display.clearDisplay();                                                  // Curăță ecranul
-    display.drawBitmap(0, 0, frames[currentFrame], 128, 64, SSD1306_WHITE);  // Desenează cadrul curent al animației
-    display.display();                                                       // Actualizează ecranul OLED
-
-    currentFrame++;  // Trece la următorul cadru
-    if (currentFrame >= totalFrames) {
-      currentFrame = 0;  // Resetează indexul cadrului dacă a ajuns la sfârșit
-    }
+  unsigned long currentTime = millis();
+  if (animatingidle && !animatingcute && (currentTime - previousTime >= framestime[currentFrame])) {
+    previousTime = currentTime;
+    display.clearDisplay();
+    display.drawBitmap(0, 0, frames[currentFrame], 128, 64, SSD1306_WHITE);
+    display.display();
+    currentFrame++;
+    if (currentFrame >= totalFrames) currentFrame = 0;
   }
 }
-void cute() {
+
+void cute(int *health) {
   unsigned long currentTime3 = millis();
-  if (digitalRead(16) == LOW && apasat2 && (currentTime3 - lastButtonPress2 < 3000)) {
+  if (!animatingcute && animatingidle && digitalRead(16) == LOW && apasat2 && (currentTime3 - lastButtonPress2 < 3000)) {
     buttonPressCount++;
     apasat2 = false;
-    lastButtonPress2 = currentTime3;}
-    if (buttonPressCount == 5) {
-      Serial.println("da");
-      buttonPressCount = 0;
-    }
-  
-  if (digitalRead(16) == HIGH) 
-    apasat2 = true;
+    lastButtonPress2 = currentTime3;
+    Serial.println(buttonPressCount);
   }
 
+  if (buttonPressCount == 5) {
+    animatingcute = true;
+    animatingidle = false;
+    if (currentTime3 - previousTime3 >= framestime3[currentFrame3]) {
+      previousTime3 = currentTime3;
+      display.clearDisplay();
+      display.drawBitmap(0, 0, frames3[currentFrame3], 128, 64, SSD1306_WHITE);
+      display.display();
+      currentFrame3++;
+      if (currentFrame3 >= totalFrames3) {
+        buttonPressCount = 0;
+        (*health)++;
+        animatingcute = false;
+        currentFrame3 = 0;
+      }
+      if(currentFrame3 == 0 && !animatingcute)
+      animatingidle = true;
+    }
+  }
+
+  if (digitalRead(16) == HIGH) apasat2 = true;
+}
 
 void progress() {
   unsigned long currentTime2 = millis();  // Obține timpul curent pentru animația de progres
