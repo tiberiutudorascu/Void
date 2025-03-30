@@ -27,8 +27,8 @@ int buttonPressCount = 0;
 
 bool apasat = false;
 bool apasat2 = false;
-bool animatingcute = false;
-bool animatingidle = true;  // idle e activ initial
+enum Mode {IDLE, CUTE};
+Mode currentMode = IDLE;// idle e activ initial
 
 bool infoBool = false;
 
@@ -69,8 +69,12 @@ void loop() {
     if (digitalRead(16) == LOW && apasat2 && (currentMillis - lastButtonPress2 > debounceDelay)) {
       apasat2 = false;
       infoBool = !infoBool;
+      currentButtonCount++;
       if (!infoBool) previousTime2 = currentMillis;
       lastButtonPress2 = currentMillis;
+      if(currentButtonCount == 5 && page == 0){
+        currentMode= CUTE;
+      buttonPressCount = 0;}
     }
     if (digitalRead(16) == HIGH) apasat2 = true;
   }
@@ -83,8 +87,9 @@ void loop() {
   }
 
   if (page == 0) {
-    idle();
-    if (infoBool) cute(&healthpoints);
+   if(currentMode == IDLE) 
+     idle();
+    else if (currentMode == CUTE) cute(&healthpoints);
   } else if (page == 1) {
     if (infoBool) stats();
     else progress();
@@ -113,30 +118,17 @@ void idle() {
 
 void cute(int *health) {
   unsigned long currentTime3 = millis();
-  if (!animatingcute && animatingidle && digitalRead(16) == LOW && apasat2 && (currentTime3 - lastButtonPress2 < 3000)) {
-    buttonPressCount++;
-    apasat2 = false;
-    lastButtonPress2 = currentTime3;
-    Serial.println(buttonPressCount);
-  }
-
-  if (buttonPressCount == 5) {
-    animatingcute = true;
-    animatingidle = false;
     if (currentTime3 - previousTime3 >= framestime3[currentFrame3]) {
       previousTime3 = currentTime3;
       display.clearDisplay();
       display.drawBitmap(0, 0, frames3[currentFrame3], 128, 64, SSD1306_WHITE);
       display.display();
-      currentFrame3++;
+      currentFrame3++;}
       if (currentFrame3 >= totalFrames3) {
-        buttonPressCount = 0;
         (*health)++;
-        animatingcute = false;
+        currentMode= IDLE:
         currentFrame3 = 0;
       }
-      if(currentFrame3 == 0 && !animatingcute)
-      animatingidle = true;
     }
   }
 
