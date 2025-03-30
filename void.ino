@@ -69,10 +69,10 @@ void loop() {
     if (digitalRead(16) == LOW && apasat2 && (currentMillis - lastButtonPress2 > debounceDelay)) {
       apasat2 = false;
       infoBool = !infoBool;
-      currentButtonCount++;
+      buttonPressCount++;
       if (!infoBool) previousTime2 = currentMillis;
       lastButtonPress2 = currentMillis;
-      if(currentButtonCount == 5 && page == 0){
+      if(buttonPressCount == 5 && page == 0){
         currentMode= CUTE;
       buttonPressCount = 0;}
     }
@@ -106,7 +106,7 @@ void loop() {
 
 void idle() {
   unsigned long currentTime = millis();
-  if (animatingidle && !animatingcute && (currentTime - previousTime >= framestime[currentFrame])) {
+  if (currentTime - previousTime >= framestime[currentFrame]) {
     previousTime = currentTime;
     display.clearDisplay();
     display.drawBitmap(0, 0, frames[currentFrame], 128, 64, SSD1306_WHITE);
@@ -126,14 +126,12 @@ void cute(int *health) {
       currentFrame3++;}
       if (currentFrame3 >= totalFrames3) {
         (*health)++;
-        currentMode= IDLE:
+        currentMode= IDLE;
         currentFrame3 = 0;
       }
     }
   }
 
-  if (digitalRead(16) == HIGH) apasat2 = true;
-}
 
 void progress() {
   unsigned long currentTime2 = millis();  // Obține timpul curent pentru animația de progres
