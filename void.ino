@@ -27,8 +27,9 @@ int buttonPressCount = 0;
 
 bool apasat = false;
 bool apasat2 = false;
-enum Mode {IDLE, CUTE};
-Mode currentMode = IDLE;// idle e activ initial
+enum Mode { IDLE,
+            CUTE };
+Mode currentMode = IDLE;  // idle e activ initial
 
 bool infoBool = false;
 
@@ -43,7 +44,8 @@ void setup() {
   dht.begin();
   if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
     Serial.println(F("Eroare la initializarea OLED!"));
-    for (;;);
+    for (;;)
+      ;
   }
   pinMode(4, INPUT_PULLUP);
   pinMode(16, INPUT_PULLUP);
@@ -65,19 +67,29 @@ void loop() {
   }
   if (digitalRead(4) == HIGH) apasat = true;
 
-  if (page == 1 || page == 0) {
-    if (digitalRead(16) == LOW && apasat2 && (currentMillis - lastButtonPress2 > debounceDelay)) {
-      apasat2 = false;
+  if (digitalRead(16) == LOW && apasat2 && (currentMillis - lastButtonPress2 > debounceDelay)) {
+    apasat2 = false;
+    lastButtonPress2 = currentMillis;
+
+    if (page == 1) {
       infoBool = !infoBool;
       buttonPressCount++;
       if (!infoBool) previousTime2 = currentMillis;
-      lastButtonPress2 = currentMillis;
-      if(buttonPressCount == 5 && page == 0){
-        currentMode= CUTE;
-      buttonPressCount = 0;}
     }
-    if (digitalRead(16) == HIGH) apasat2 = true;
+
+    else if (page == 0) {
+      buttonPressCount++;
+      Serial.println(buttonPressCount);
+      if (buttonPressCount == 15) {
+        currentMode = CUTE;
+        buttonPressCount = 0;
+      }
+    }
   }
+
+  if (digitalRead(16) == HIGH) apasat2 = true;
+
+
 
   static int lastPage = -1;
   if (page != lastPage) {
@@ -87,8 +99,8 @@ void loop() {
   }
 
   if (page == 0) {
-   if(currentMode == IDLE) 
-     idle();
+    if (currentMode == IDLE)
+      idle();
     else if (currentMode == CUTE) cute(&healthpoints);
   } else if (page == 1) {
     if (infoBool) stats();
@@ -118,19 +130,20 @@ void idle() {
 
 void cute(int *health) {
   unsigned long currentTime3 = millis();
-    if (currentTime3 - previousTime3 >= framestime3[currentFrame3]) {
-      previousTime3 = currentTime3;
-      display.clearDisplay();
-      display.drawBitmap(0, 0, frames3[currentFrame3], 128, 64, SSD1306_WHITE);
-      display.display();
-      currentFrame3++;}
-      if (currentFrame3 >= totalFrames3) {
-        (*health)++;
-        currentMode= IDLE;
-        currentFrame3 = 0;
-      }
-    }
+  if (currentTime3 - previousTime3 >= framestime3[currentFrame3]) {
+    previousTime3 = currentTime3;
+    display.clearDisplay();
+    display.drawBitmap(0, 0, frames3[currentFrame3], 128, 64, SSD1306_WHITE);
+    display.display();
+    currentFrame3++;
   }
+  if (currentFrame3 >= totalFrames3) {
+    (*health)++;
+    currentMode = IDLE;
+    currentFrame3 = 0;
+  }
+}
+
 
 
 void progress() {
