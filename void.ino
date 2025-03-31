@@ -72,7 +72,6 @@ void loop() {
 
     if (page == 1) {
       infoBool = !infoBool;
-      buttonPressCount++;
       if (!infoBool) previousTime2 = currentMillis;
     }
 
