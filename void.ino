@@ -43,6 +43,9 @@ float temperature;
 int healthpoints = 0;
 float angrypoints = 0;
 
+unsigned long HPtime = 0;
+
+
 void setup()
 {
     Serial.begin(9600);
@@ -60,10 +63,14 @@ void setup()
 }
 
 void loop()
-{
+{    
     unsigned long currentMillis = millis();
     temperature = dht.readTemperature();
-
+       if(currentMillis - HPtime >= 300000)
+    {
+       healthpoints--;
+       HPtime = currentMillis;
+    }
     if (digitalRead(4) == LOW && apasat && (currentMillis - lastButtonPress1 > debounceDelay))
     {
         apasat = false;
