@@ -7,7 +7,7 @@ const unsigned char *frames[] = {happyidle1, happyidle2, happyidle3, happyidle4,
                                  happyidle13, happyidle12, happyidle11, happyidle10, happyidle1};
 const unsigned char *frames3[] = {cute1, cute2, cute3, cute4, cute5, cute6, cute7, cute6, cute5, cute4, cute3, cute2, cute1};
 const unsigned char *frames4[] = {angry1, angry2, angry3, angry4, angry5, angry6, angry7, angry8, angry7, angry8, angry7, angry8, angry7, angry8, angry7, angry8, angry7, angry8, angry6, angry5, angry4, angry3, angry2, angry1};
-
+const unsigned char *rooms[] = {bedroompic};
 const unsigned char *progiconsSun[] = {infosun1, infosun2, infosun3};
 const unsigned char *progiconsCold[] = {infocold1, infocold2, infocold3};
 const unsigned char *progiconsHot[] = {infohot1, infohot2, infohot3};
