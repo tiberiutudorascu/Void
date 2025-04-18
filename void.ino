@@ -74,7 +74,11 @@ int currentAngleDS;
 Servo stangaF;
 int PositionSF = 90;
 int currentAngleSF;
-int lastMoveTime = 0;
+int lastMoveTimeSS = 0;
+int lastMoveTimeDF = 0;
+int lastMoveTimeDS = 0;
+int lastMoveTimeSF = 0;
+int targetAngles1[] = {45, 0, 45, 0, 45, 0, 45, 0};
 
 void setup()
 {
@@ -107,7 +111,7 @@ void setup()
     display.clearDisplay();
     display.display();
 }
-void servoMovement(Servo &s, int targetAngle, int &currentAngle, int &lastMoveTime, int step = 1, unsigned long stepDelay = 15)
+void servoMovement(Servo &s, int targetAngle, int &currentAngle, int &lastMoveTime, int step = 5, unsigned long stepDelay = 10)
 {
     unsigned long currentTime7 = millis();
     if (currentTime7 - lastMoveTime >= stepDelay)
@@ -126,6 +130,40 @@ void servoMovement(Servo &s, int targetAngle, int &currentAngle, int &lastMoveTi
             if (currentAngle < targetAngle)
                 currentAngle = targetAngle;
             s.write(currentAngle);
+        }
+    }
+}
+void servoMultipleMovement(Servo &s, int targetAngles[], int size, int &currentAngle, int &lastMoveTime, int step = 5, unsigned long stepDelay = 15)
+{
+    static int i = 0;
+    unsigned long currentTime = millis();
+
+    if (i >= size)
+        i = 0;
+
+    if (currentTime - lastMoveTime >= stepDelay)
+    {
+        lastMoveTime = currentTime;
+        int target = targetAngles[i];
+
+        if (currentAngle < target)
+        {
+            currentAngle += step;
+            if (currentAngle > target)
+                currentAngle = target;
+            s.write(currentAngle);
+        }
+        else if (currentAngle > target)
+        {
+            currentAngle -= step;
+            if (currentAngle < target)
+                currentAngle = target;
+            s.write(currentAngle);
+        }
+
+        if (currentAngle == target)
+        {
+            i++;
         }
     }
 }
@@ -201,24 +239,34 @@ void loop()
             Serial.println(buttonPressCount);
             Serial.print("AngryPoints: ");
             Serial.println(angrypoints);
-            AngryTarget = temperature >= 19 && temperature <= 27 ? 15 : temperature >= 15 && temperature <= 18 ?
+            AngryTarget = temperature >= 19 && temperature <= 27 ? 15 : temperature >= 15 && temperature <= 18 ? 10
                                                                                                                : 5;
-            if (buttonPressCount == AngryTarget && angrypoints == 3)
+            if (buttonPressCount == AngryTarget)
             {
-                currentMode = ANGRY;
-                if (lastMode != currentMode)
-                    lastMode = currentMode;
-                buttonPressCount = 0;
-            }
-            else if (buttonPressCount == AngryTarget && angrypoints < 3)
-            {
-                currentMode = CUTE;
-                if (lastMode != currentMode)
-                    lastMode = currentMode;
-                angrypoints = angrypoints + 0.5;
-                Serial.print("Health: ");
-                Serial.println(healthpoints);
-                buttonPressCount = 0;
+                if (currentMode == SLEEP)
+                {
+                    currentMode = ANGRY;
+                    if (lastMode != currentMode)
+                        lastMode = currentMode;
+                    buttonPressCount = 0;
+                }
+                else if (angrypoints == 3)
+                {
+                    currentMode = ANGRY;
+                    if (lastMode != currentMode)
+                        lastMode = currentMode;
+                    buttonPressCount = 0;
+                }
+                else if (angrypoints < 3)
+                {
+                    currentMode = CUTE;
+                    if (lastMode != currentMode)
+                        lastMode = currentMode;
+                    angrypoints = angrypoints + 0.5;
+                    Serial.print("Health: ");
+                    Serial.println(healthpoints);
+                    buttonPressCount = 0;
+                }
             }
         }
     }
@@ -272,17 +320,24 @@ void loop()
     }
     if (currentMode == SLEEP)
     {
-        servoMovement(stangaS, 0, currentAngleSS, lastMoveTime);
-        servoMovement(dreaptaF, 90, currentAngleDF, lastMoveTime);
-        servoMovement(dreaptaS, 90, currentAngleDS, lastMoveTime);
-        servoMovement(stangaF, 0, currentAngleSF, lastMoveTime);
+        servoMovement(stangaS, 0, currentAngleSS, lastMoveTimeSS);
+        servoMovement(dreaptaF, 90, currentAngleDF, lastMoveTimeDF);
+        servoMovement(dreaptaS, 90, currentAngleDS, lastMoveTimeDS);
+        servoMovement(stangaF, 0, currentAngleSF, lastMoveTimeSF);
     }
     if (currentMode == IDLE)
     {
-        servoMovement(stangaS, 90, currentAngleSS, lastMoveTime);
-        servoMovement(dreaptaF, 0, currentAngleDF, lastMoveTime);
-        servoMovement(dreaptaS, 0, currentAngleDS, lastMoveTime);
-        servoMovement(stangaF, 90, currentAngleSF, lastMoveTime);
+        servoMovement(stangaS, 90, currentAngleSS, lastMoveTimeSS);
+        servoMovement(dreaptaF, 0, currentAngleDF, lastMoveTimeDF);
+        servoMovement(dreaptaS, 0, currentAngleDS, lastMoveTimeDS);
+        servoMovement(stangaF, 90, currentAngleSF, lastMoveTimeSF);
+    }
+    if (currentMode == CUTE)
+    {
+        servoMovement(stangaS, 45, currentAngleSS, lastMoveTimeSS);
+        servoMovement(dreaptaS, 45, currentAngleDS, lastMoveTimeDS);
+        servoMovement(dreaptaF, 0, currentAngleDF, lastMoveTimeDF);
+        servoMultipleMovement(stangaF, targetAngles1, 8, currentAngleSF, lastMoveTimeSF);
     }
 
     if (currentMillis - lastTempCheck >= 10000)
@@ -299,8 +354,8 @@ void idle()
     {
         previousTime = currentTime;
         display.clearDisplay();
-        if (sleeppoints >= 45)
-            display.drawBitmap(0, 0, frames[currentFrames], 128, 64, SSD1306_WHITE);
+        //  if (sleeppoints >= 45)
+        display.drawBitmap(0, 0, frames[currentFrames], 128, 64, SSD1306_WHITE);
         display.display();
         currentFrames++;
         if (currentFrames >= totalFrames)
@@ -460,11 +515,11 @@ void sleepy(int &sleeppoints)
         currentMode = IDLE;
         lastMode = SLEEP;
     }
-
-    if (sleeppoints < 100 && currentMode == SLEEP && buttonPressCount == 15)
+    if (buttonPressCount == 15)
     {
         currentMode = ANGRY;
         lastMode = SLEEP;
+        buttonPressCount = 0;
     }
 }
 void instrument(int &playpoints)
