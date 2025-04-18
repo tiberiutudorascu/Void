@@ -56,6 +56,8 @@ int sleeppoints = 0;
 int playpoints = 0;
 int hungerpoints = 0;
 
+int AngryTarget;
+
 unsigned long sleepTime = 0;
 
 unsigned long HPtime = 0;
@@ -110,7 +112,7 @@ void servoMovement(Servo &s, int targetAngle, int &currentAngle, int &lastMoveTi
     unsigned long currentTime7 = millis();
     if (currentTime7 - lastMoveTime >= stepDelay)
     {
-        previousTime7 = currentTime7;
+        lastMoveTime = currentTime7;
         if (currentAngle < targetAngle)
         {
             currentAngle += step;
@@ -199,18 +201,20 @@ void loop()
             Serial.println(buttonPressCount);
             Serial.print("AngryPoints: ");
             Serial.println(angrypoints);
-
-            if (buttonPressCount == 15 && angrypoints == 3)
+            AngryTarget = temperature >= 19 && temperature <= 27 ? 15 : temperature >= 15 && temperature <= 18 ?
+                                                                                                               : 5;
+            if (buttonPressCount == AngryTarget && angrypoints == 3)
             {
                 currentMode = ANGRY;
-                lastMode = ANGRY;
-
+                if (lastMode != currentMode)
+                    lastMode = currentMode;
                 buttonPressCount = 0;
             }
-            else if (buttonPressCount == 15 && angrypoints < 3)
+            else if (buttonPressCount == AngryTarget && angrypoints < 3)
             {
                 currentMode = CUTE;
-                lastMode = CUTE;
+                if (lastMode != currentMode)
+                    lastMode = currentMode;
                 angrypoints = angrypoints + 0.5;
                 Serial.print("Health: ");
                 Serial.println(healthpoints);
@@ -245,7 +249,7 @@ void loop()
         if (infoBool)
             stats();
         else
-            progress(healthpoints, sleeppoints, hungerpoints);
+            progress(healthpoints, sleeppoints, hungerpoints, playpoints);
     }
     else if (page == 2)
     {
@@ -295,7 +299,8 @@ void idle()
     {
         previousTime = currentTime;
         display.clearDisplay();
-        display.drawBitmap(0, 0, frames[currentFrames], 128, 64, SSD1306_WHITE);
+        if (sleeppoints >= 45)
+            display.drawBitmap(0, 0, frames[currentFrames], 128, 64, SSD1306_WHITE);
         display.display();
         currentFrames++;
         if (currentFrames >= totalFrames)
@@ -451,16 +456,16 @@ void sleepy(int &sleeppoints)
     }
 
     if (sleeppoints > 100)
-        {
-            currentMode = IDLE;
-            lastMode = SLEEP;
-        }
+    {
+        currentMode = IDLE;
+        lastMode = SLEEP;
+    }
 
-        if(sleeppoints < 100 && currentMode == SLEEP && buttonPressCount == 15)
-        {     currentMode = ANGRY;
-              lastMode = SLEEP;
-
-        }
+    if (sleeppoints < 100 && currentMode == SLEEP && buttonPressCount == 15)
+    {
+        currentMode = ANGRY;
+        lastMode = SLEEP;
+    }
 }
 void instrument(int &playpoints)
 {
@@ -506,7 +511,7 @@ void shop()
     display.display();
 }
 
-void progress(int &healthpoints, int &sleeppoints, int &hungrypoints)
+void progress(int &healthpoints, int &sleeppoints, int &hungrypoints, int &playpoints)
 {
     unsigned long currentTime2 = millis();
     display.clearDisplay();
@@ -556,7 +561,15 @@ void progress(int &healthpoints, int &sleeppoints, int &hungrypoints)
         display.drawRoundRect(65, 16, 10, 40, 10, SSD1306_WHITE);
 
         if (temperature >= 19 && temperature <= 27)
+        {
             display.drawBitmap(0, 0, progiconsSun[currentFrames2], 128, 64, SSD1306_WHITE);
+            if (currentTime2 - HPtime >= 300000)
+            {
+                healthpoints--;
+                sleeppoints--;
+                HPtime = currentTime2;
+            }
+        }
         if (temperature >= 15 && temperature <= 18)
             display.drawBitmap(0, 0, progiconsCold[currentFrames2], 128, 64, SSD1306_WHITE);
         if (temperature >= -5 && temperature <= 14)
