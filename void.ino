@@ -38,7 +38,6 @@ enum Mode
     SLEEP,
     PLAY,
     HUNGRY,
-    BORED
 };
 Mode currentMode = IDLE; // idle e activ initial
 Mode lastMode = IDLE;
@@ -80,6 +79,27 @@ int lastMoveTimeDS = 0;
 int lastMoveTimeSF = 0;
 int targetAngles1[] = {45, 0, 45, 0, 45, 0, 45, 0};
 
+int money = 2000;
+enum CoinflipState
+{
+    COINFLIP_IDLE,
+    COINFLIP_FLIPPING,
+    COINFLIP_SHOW_RESULT
+};
+
+CoinflipState coinState = COINFLIP_IDLE;
+unsigned long coinStartTime = 0;
+int winlose = 0;
+bool coinInProgress = false;
+
+int food = 4, drinks = 40;
+bool haveTV = false, tvON = false;
+bool haveCards = false, cardsON = false;
+bool haveBook = false, bookON = false;
+bool haveRadio = false, radioON = false;
+int itemPage = 0;
+bool pickingItem = false;
+
 void setup()
 {
     Serial.begin(9600);
@@ -91,10 +111,10 @@ void setup()
             ;
     }
 
-    stangaS.attach(23);
-    dreaptaF.attach(18);
+    stangaS.attach(18);
+    dreaptaF.attach(19);
     dreaptaS.attach(15);
-    stangaF.attach(19);
+    stangaF.attach(23);
 
     stangaS.write(PositionSS);
     currentAngleSS = PositionSS;
@@ -189,8 +209,12 @@ void loop()
             page++;
         if (page > totalPages)
             page = 0;
-        if (infoPage > totalInfoPages)
+        if (page == 1 && infoPage > totalInfoPages)
             infoPage = 0;
+        if (pickingItem)
+            itemPage++;
+        if (itemPage > totalItems)
+            itemPage = 0;
     }
     if (digitalRead(4) == HIGH)
         apasat = true;
@@ -203,6 +227,8 @@ void loop()
         {
             infoBool = false;
             infoConfirm = false;
+            pickingItem = false;
+            itemPage = 0;
         }
         else
         {
@@ -217,7 +243,7 @@ void loop()
         apasat2 = false;
         lastButtonPress2 = currentMillis;
 
-        if (page == 1 || page == 2)
+        if (page != 0)
         {
             if (!infoBool)
             {
@@ -280,9 +306,14 @@ void loop()
         Serial.println(page);
         lastPage = page;
     }
-
+    static bool wasOnPage0 = false;
     if (page == 0)
     {
+        if (!wasOnPage0)
+        {
+            currentFrames = 0;
+            wasOnPage0 = true;
+        }
         if (currentMode == IDLE)
             idle();
         else if (currentMode == CUTE)
@@ -291,8 +322,14 @@ void loop()
             angry(healthpoints);
         else if (currentMode == SLEEP)
             sleepy(sleeppoints);
+        else if (currentMode == PLAY)
+            idleplay(playpoints);
     }
-    else if (page == 1)
+    else
+    {
+        wasOnPage0 = false;
+    }
+    if (page == 1)
     {
         if (infoBool)
             stats();
@@ -301,22 +338,19 @@ void loop()
     }
     else if (page == 2)
     {
-        if (currentMode == PLAY)
-            instrument(playpoints);
-        else
-            bedroom();
+        bedroom();
     }
     else if (page == 3)
     {
-        kitchen();
+        kitchen(hungerpoints, drinks, food);
     }
     else if (page == 4)
     {
-        coinflip();
+        coinflip(money);
     }
     else if (page == 5)
     {
-        shop();
+        shop(money, drinks, food, haveCards, haveBook, haveRadio, haveTV);
     }
     if (currentMode == SLEEP)
     {
@@ -346,7 +380,6 @@ void loop()
         lastTempCheck = currentMillis;
     }
 }
-
 void idle()
 {
     unsigned long currentTime = millis();
@@ -354,12 +387,52 @@ void idle()
     {
         previousTime = currentTime;
         display.clearDisplay();
-        //  if (sleeppoints >= 45)
         display.drawBitmap(0, 0, frames[currentFrames], 128, 64, SSD1306_WHITE);
         display.display();
         currentFrames++;
         if (currentFrames >= totalFrames)
             currentFrames = 0;
+    }
+}
+void idleplay(int &playpoints)
+{
+    unsigned long currentTime = millis();
+    if (currentTime - previousTime >= framestime[currentFrames])
+    {
+        previousTime = currentTime;
+        display.clearDisplay();
+
+        display.drawBitmap(0, 0, frames[currentFrames], 128, 64, SSD1306_WHITE);
+
+        if (currentMode == PLAY)
+        {
+            if (cardsON)
+            {
+                display.drawBitmap(0, 0, items[0], 128, 64, SSD1306_WHITE);
+                playpoints += 2;
+            }
+            else if (bookON)
+            {
+                display.drawBitmap(0, 0, items[1], 128, 64, SSD1306_WHITE);
+                playpoints += 4;
+            }
+            else if (radioON)
+            {
+                display.drawBitmap(0, 0, items[2], 128, 64, SSD1306_WHITE);
+                playpoints += 5;
+            }
+            else if (tvON)
+            {
+                display.drawBitmap(0, 0, items[3], 128, 64, SSD1306_WHITE);
+                playpoints += 8;
+            }
+        }
+
+        currentFrames++;
+        if (currentFrames >= totalFrames)
+            currentFrames = 0;
+
+        display.display();
     }
 }
 
@@ -384,7 +457,7 @@ void cute(int &health)
     if (currentFrames3 >= totalFrames3)
     {
         Serial.println("ANIMATIE TERMINATA - +1 HEALTH");
-        health++;
+        health += 10;
         Serial.print("HEALTH: ");
         Serial.println(health);
         currentMode = IDLE;
@@ -407,7 +480,7 @@ void angry(int &health)
         {
             currentFrames4 = 0;
             angrypoints = 0;
-            health--;
+            health -= 2;
             currentMode = IDLE;
             lastMode = ANGRY;
         }
@@ -417,74 +490,206 @@ void bedroom()
 {
     unsigned long currentTime6 = millis();
 
-    if (!infoBool)
+    if (!pickingItem)
     {
-        if (currentTime6 - previousTime6 >= 300)
+        if (!infoBool)
         {
-            previousTime6 = currentTime6;
+            if (currentTime6 - previousTime6 >= 300)
+            {
+                previousTime6 = currentTime6;
+                display.clearDisplay();
+                display.drawBitmap(0, 0, bedrooms[currentFrames6], 128, 64, SSD1306_WHITE);
+                display.setTextColor(SSD1306_WHITE);
+                display.setTextSize(1);
+                display.setCursor(0, 0);
+                display.println("Bedroom");
+
+                display.display();
+                currentFrames6++;
+                if (currentFrames6 >= totalFrames6)
+                    currentFrames6 = 0;
+            }
+        }
+        else
+        {
             display.clearDisplay();
-            display.drawBitmap(0, 0, bedrooms[currentFrames6], 128, 64, SSD1306_WHITE);
-            display.setTextColor(SSD1306_WHITE);
-            display.setTextSize(1);
+            display.drawBitmap(0, 0, roomStatic[0], 128, 64, SSD1306_WHITE);
             display.setCursor(0, 0);
-            display.println("Bedroom");
+            display.setTextColor(SSD1306_WHITE);
+
+            if (currentMode == SLEEP)
+            {
+                if (infoPage == 0)
+                {
+                    display.setTextSize(1.5);
+                    display.println(">Wake Up");
+                    display.setTextSize(1);
+                    display.println("Items");
+
+                    if (infoConfirm)
+                    {
+                        currentMode = IDLE;
+                        infoConfirm = false;
+                    }
+                }
+                else if (infoPage == 1)
+                {
+                    display.setTextSize(1);
+                    display.println("Wake Up");
+                    display.setTextSize(1.5);
+                    display.println(">Pick Item");
+
+                    if (infoConfirm)
+                    {
+                        pickingItem = true;
+                        itemPage = 0;
+                        infoConfirm = false;
+                    }
+                }
+            }
+            else
+            {
+                if (infoPage == 0)
+                {
+                    display.setTextSize(1.5);
+                    display.println(">Sleep");
+                    display.setTextSize(1);
+                    display.println("Items");
+
+                    if (infoConfirm)
+                    {
+                        currentMode = SLEEP;
+                        infoConfirm = false;
+                    }
+                }
+                else if (infoPage == 1)
+                {
+                    display.setTextSize(1);
+                    display.println("Sleep");
+                    display.setTextSize(1.5);
+                    display.println(">Pick Item");
+
+                    if (infoConfirm)
+                    {
+                        pickingItem = true;
+                        itemPage = 0;
+                        infoConfirm = false;
+                    }
+                }
+            }
+
+            if (infoPage > 1)
+                infoPage = 0;
 
             display.display();
-            currentFrames6++;
-            if (currentFrames6 >= totalFrames6)
-                currentFrames6 = 0;
         }
     }
     else
     {
-
         display.clearDisplay();
         display.drawBitmap(0, 0, roomStatic[0], 128, 64, SSD1306_WHITE);
         display.setCursor(0, 0);
         display.setTextColor(SSD1306_WHITE);
 
-        if (infoPage == 0 && currentMode == IDLE)
+        if (itemPage == 0)
+            display.println(">Cards");
+        else if (itemPage == 1)
+            display.println(">Book");
+        else if (itemPage == 2)
+            display.println(">Radio");
+        else if (itemPage == 3)
+            display.println(">TV");
+
+        if (infoConfirm)
         {
-            display.setTextSize(1.5);
-            display.println(">Sleep");
-            display.setTextSize(1);
-            display.println("Instrument");
-            if (infoConfirm)
+            if (itemPage == 0 && haveCards)
             {
-                currentMode = SLEEP;
-                infoConfirm = false;
+                if (cardsON)
+                {
+                    cardsON = false;
+                    currentMode = IDLE;
+                }
+                else
+                {
+                    cardsON = true;
+                    bookON = false;
+                    radioON = false;
+                    tvON = false;
+                    currentMode = PLAY;
+                }
             }
-        }
-        else if (infoPage == 0 && currentMode == SLEEP)
-        {
-            display.setTextSize(1.5);
-            display.println(">Wake Up");
-            display.setTextSize(1);
-            display.println("Instrument");
-            if (infoConfirm)
+            else if (itemPage == 1 && haveBook)
             {
-                currentMode = IDLE;
-                infoConfirm = false;
+                if (bookON)
+                {
+                    bookON = false;
+                    currentMode = IDLE;
+                }
+                else
+                {
+                    cardsON = false;
+                    bookON = true;
+                    radioON = false;
+                    tvON = false;
+                    currentMode = PLAY;
+                }
             }
-        }
-        else if (infoPage == 1)
-        {
-            display.setTextSize(1);
-            display.println(currentMode == SLEEP ? "Wake Up" : "Sleep");
-            display.setTextSize(1.5);
-            display.println(">Instrument");
-            if (infoConfirm)
+            else if (itemPage == 2 && haveRadio)
             {
-                currentMode = PLAY;
+                if (radioON)
+                {
+                    radioON = false;
+                    currentMode = IDLE;
+                }
+                else
+                {
+                    cardsON = false;
+                    bookON = false;
+                    radioON = true;
+                    tvON = false;
+                    currentMode = PLAY;
+                }
             }
+            else if (itemPage == 3 && haveTV)
+            {
+                if (tvON)
+                {
+                    tvON = false;
+                    currentMode = IDLE;
+                }
+                else
+                {
+                    cardsON = false;
+                    bookON = false;
+                    radioON = false;
+                    tvON = true;
+                    currentMode = PLAY;
+                }
+            }
+            else
+            {
+                display.clearDisplay();
+                display.setCursor(0, 0);
+                display.setTextSize(1);
+                display.println("LOCKED ITEM");
+                display.display();
+                delay(1000);
+            }
+
+            infoConfirm = false;
+            pickingItem = false;
+            infoBool = false;
+            infoPage = 0;
+            itemPage = 0;
         }
 
-        if (infoPage > 1)
-            infoPage = 0;
+        if (itemPage > 3)
+            itemPage = 0;
 
         display.display();
     }
 }
+
 void sleepy(int &sleeppoints)
 {
     unsigned long currentTime5 = millis();
@@ -507,7 +712,7 @@ void sleepy(int &sleeppoints)
     if (currentTime5 - sleepTime > 60000)
     {
         sleepTime = currentTime5;
-        sleeppoints = sleeppoints + 2;
+        sleeppoints = sleeppoints + 5;
     }
 
     if (sleeppoints > 100)
@@ -515,6 +720,8 @@ void sleepy(int &sleeppoints)
         currentMode = IDLE;
         lastMode = SLEEP;
     }
+    if (playpoints > 100)
+        playpoints = 100;
     if (buttonPressCount == 15)
     {
         currentMode = ANGRY;
@@ -522,48 +729,335 @@ void sleepy(int &sleeppoints)
         buttonPressCount = 0;
     }
 }
-void instrument(int &playpoints)
+void kitchen(int &hungrypoints, int &drinks, int &food)
 {
+    unsigned long currentTime8 = millis();
+
+    if (!infoBool)
+    {
+        if (currentTime8 - previousTime8 >= 300)
+        {
+            previousTime8 = currentTime8;
+            display.clearDisplay();
+            display.drawBitmap(0, 0, kitchens[currentFrames8], 128, 64, SSD1306_WHITE);
+            display.setTextColor(SSD1306_WHITE);
+            display.setTextSize(1);
+            display.setCursor(0, 0);
+            display.println("Kitchen");
+
+            display.display();
+            currentFrames8++;
+            if (currentFrames8 >= totalFrames8)
+                currentFrames8 = 0;
+        }
+    }
+    else
+    {
+
+        display.clearDisplay();
+        display.drawBitmap(0, 0, roomStatic[2], 128, 64, SSD1306_WHITE);
+        display.setCursor(0, 0);
+        display.setTextColor(SSD1306_WHITE);
+        if (currentMode != SLEEP)
+        {
+            if (infoPage == 0)
+            {
+                display.setTextSize(1.5);
+                display.print(">Drink");
+                display.println(drinks);
+                display.setTextSize(1);
+                display.println("Burger");
+                if (infoConfirm && drinks >= 1)
+                {
+                    infoConfirm = false;
+                    drinks--;
+                    Serial.println("Drank water.");
+                    Serial.print("Water bottles left: ");
+                    Serial.println(drinks);
+                    hungrypoints += 5;
+                }
+            }
+            else if (infoPage == 1 && currentMode != SLEEP)
+            {
+                display.setTextSize(1);
+                display.println("Water");
+                display.setTextSize(1.5);
+                display.print(">Eat");
+                display.println(food);
+
+                if (infoConfirm && food >= 1)
+                {
+                    infoConfirm = false;
+                    food--;
+                    Serial.println("Ate burger.");
+                    Serial.print("Food left: ");
+                    Serial.println(food);
+                    hungrypoints += 10;
+                }
+            }
+            if (hungerpoints > 100)
+                hungerpoints = 100;
+            if (infoPage > 1)
+                infoPage = 0;
+
+            display.display();
+        }
+        else
+        {
+            display.clearDisplay();
+            display.drawBitmap(0, 0, kitchens[currentFrames8], 128, 64, SSD1306_WHITE);
+            display.setTextColor(SSD1306_WHITE);
+            display.setTextSize(1);
+            display.setCursor(0, 0);
+            display.println("Kitchen");
+            display.println("Void is asleep");
+
+            display.display();
+        }
+    }
 }
 
-void kitchen()
+void coinflip(int &money)
 {
+    unsigned long currentTime7 = millis();
     display.clearDisplay();
     display.setTextColor(SSD1306_WHITE);
     display.setTextSize(1);
     display.setCursor(0, 0);
-    display.println("Esti in bucatarie.");
-    display.println();
-    display.println("Aici o sa apara");
-    display.println("un frigider pe care");
-    display.println("poti intra.");
+    display.print("$");
+    display.println(money);
+
+    if (!infoBool)
+    {
+        display.drawBitmap(0, 0, roomStatic[1], 128, 64, SSD1306_WHITE);
+    }
+    else
+    {
+        switch (coinState)
+        {
+        case COINFLIP_IDLE:
+            coinInProgress = true;
+            coinStartTime = currentTime7;
+            currentFrames7 = 0;
+            winlose = random(1, 3); // 1 win, 2 lose
+            coinState = COINFLIP_FLIPPING;
+            break;
+
+        case COINFLIP_FLIPPING:
+            if (currentTime7 - previousTime7 >= framestime7[currentFrames7] && currentFrames7 < totalFrames7)
+            {
+                previousTime7 = currentTime7;
+                display.drawBitmap(0, 0, coinflipanimation[currentFrames7], 128, 64, SSD1306_WHITE);
+                currentFrames7++;
+            }
+            else if (currentFrames7 >= totalFrames7)
+            {
+                coinStartTime = currentTime7;
+                coinState = COINFLIP_SHOW_RESULT;
+            }
+            break;
+
+        case COINFLIP_SHOW_RESULT:
+            if (winlose == 1)
+            {
+                display.drawBitmap(0, 0, winloseframes[0], 128, 64, SSD1306_WHITE);
+            }
+            else
+            {
+                display.drawBitmap(0, 0, winloseframes[1], 128, 64, SSD1306_WHITE);
+            }
+
+            if (currentTime7 - coinStartTime >= 2300)
+            {
+                if (winlose == 1)
+                {
+                    money++;
+                }
+                infoBool = false;
+                coinInProgress = false;
+                coinState = COINFLIP_IDLE;
+            }
+            break;
+        }
+    }
+
     display.display();
 }
-void coinflip()
+
+void shop(int &money, int &drinks, int &food, bool &haveCards, bool &haveBook, bool &haveRadio, bool &haveTV)
 {
-    display.clearDisplay();
-    display.setTextColor(SSD1306_WHITE);
-    display.setTextSize(1);
-    display.setCursor(0, 0);
-    display.println("Esti in minigameul coinflip.");
-    display.println();
-    display.println("Aici o sa apara");
-    display.println("un joc pe care");
-    display.println("poti intra.");
-    display.display();
-}
-void shop()
-{
-    display.clearDisplay();
-    display.setTextColor(SSD1306_WHITE);
-    display.setTextSize(1);
-    display.setCursor(0, 0);
-    display.println("Esti in shop.");
-    display.println();
-    display.println("Aici o sa apara");
-    display.println("un shop pe care");
-    display.println("poti intra sa cheltui banii.");
-    display.display();
+    unsigned long currentTime9 = millis();
+
+    if (!infoBool)
+    {
+        if (currentTime9 - previousTime9 >= 300)
+        {
+            previousTime9 = currentTime9;
+            display.clearDisplay();
+            display.drawBitmap(0, 0, shops[currentFrames9], 128, 64, SSD1306_WHITE);
+            display.setTextColor(SSD1306_WHITE);
+            display.setTextSize(1);
+            display.setCursor(0, 0);
+            display.println("Shop");
+
+            display.display();
+            currentFrames9++;
+            if (currentFrames9 >= totalFrames9)
+                currentFrames9 = 0;
+        }
+    }
+    else
+    {
+        display.clearDisplay();
+        if (currentMode != SLEEP)
+        {
+            display.setCursor(0, 0);
+            display.setTextColor(SSD1306_WHITE);
+            display.setTextSize(1);
+
+            if (infoPage == 0)
+            {
+                display.print(">Buy Water $5\n");
+                display.println("Buy Burger");
+                display.println("Buy Cards");
+                display.println("Buy Book");
+                display.println("Buy Radio");
+                display.println("Buy TV");
+
+                if (infoConfirm && money >= 5)
+                {
+                    drinks++;
+                    money -= 5;
+                    Serial.println("Bought Water");
+                    infoConfirm = false;
+                    infoPage = 0;
+                }
+            }
+            else if (infoPage == 1)
+            {
+                display.println("Buy Water");
+                display.print(">Buy Burger $10\n");
+                display.println("Buy Cards");
+                display.println("Buy Book");
+                display.println("Buy Radio");
+                display.println("Buy TV");
+
+                if (infoConfirm && money >= 10)
+                {
+                    food++;
+                    money -= 10;
+                    Serial.println("Bought Burger");
+                    infoConfirm = false;
+                    infoPage = 0;
+                }
+            }
+            else if (infoPage == 2)
+            {
+                display.println("Buy Water");
+                display.println("Buy Burger");
+                display.print(">Buy Cards $20\n");
+                display.println("Buy Book");
+                display.println("Buy Radio");
+                display.println("Buy TV");
+
+                if (infoConfirm && money >= 20 && !haveCards)
+                {
+                    haveCards = true;
+                    money -= 20;
+                    Serial.println("Bought Cards");
+                    infoConfirm = false;
+                    infoPage = 0;
+                }
+                else if (infoConfirm && haveCards)
+                {
+                    Serial.println("Already own Cards!");
+                    infoConfirm = false;
+                }
+            }
+            else if (infoPage == 3)
+            {
+                display.println("Buy Water");
+                display.println("Buy Burger");
+                display.println("Buy Cards");
+                display.print(">Buy Book $30\n");
+                display.println("Buy Radio");
+                display.println("Buy TV");
+
+                if (infoConfirm && money >= 30 && !haveBook)
+                {
+                    haveBook = true;
+                    money -= 30;
+                    Serial.println("Bought Book");
+                    infoConfirm = false;
+                    infoPage = 0;
+                }
+                else if (infoConfirm && haveBook)
+                {
+                    Serial.println("Already own Book!");
+                    infoConfirm = false;
+                }
+            }
+            else if (infoPage == 4)
+            {
+                display.println("Buy Water");
+                display.println("Buy Burger");
+                display.println("Buy Cards");
+                display.println("Buy Book");
+                display.print(">Buy Radio $50\n");
+                display.println("Buy TV");
+
+                if (infoConfirm && money >= 50 && !haveRadio)
+                {
+                    haveRadio = true;
+                    money -= 50;
+                    Serial.println("Bought Radio");
+                    infoConfirm = false;
+                    infoPage = 0;
+                }
+                else if (infoConfirm && haveRadio)
+                {
+                    Serial.println("Already own Radio!");
+                    infoConfirm = false;
+                }
+            }
+            else if (infoPage == 5)
+            {
+                display.println("Buy Water");
+                display.println("Buy Burger");
+                display.println("Buy Cards");
+                display.println("Buy Book");
+                display.println("Buy Radio");
+                display.print(">Buy TV $200\n");
+
+                if (infoConfirm && money >= 200 && !haveTV)
+                {
+                    haveTV = true;
+                    money -= 200;
+                    Serial.println("Bought TV");
+                    infoConfirm = false;
+                    infoPage = 0;
+                }
+                else if (infoConfirm && haveTV)
+                {
+                    Serial.println("Already own TV!");
+                    infoConfirm = false;
+                }
+            }
+
+            if (infoPage > 5)
+                infoPage = 0;
+        }
+        else
+        {
+            display.drawBitmap(0, 0, shops[currentFrames8], 128, 64, SSD1306_WHITE);
+            display.setCursor(0, 0);
+            display.setTextColor(SSD1306_WHITE);
+            display.setTextSize(1);
+            display.println("Shop");
+            display.println("Void is asleep");
+        }
+        display.display();
+    }
 }
 
 void progress(int &healthpoints, int &sleeppoints, int &hungrypoints, int &playpoints)
@@ -574,64 +1068,76 @@ void progress(int &healthpoints, int &sleeppoints, int &hungrypoints, int &playp
     if (currentTime2 - previousTime2 >= 300)
     {
         previousTime2 = currentTime2;
-        if (temperature >= 19 && temperature <= 27)
-        {
-            display.drawBitmap(0, 0, progiconsSun[currentFrames2], 128, 64, SSD1306_WHITE);
-            if (currentTime2 - HPtime >= 300000)
-            {
-                healthpoints--;
-                sleeppoints--;
-                HPtime = currentTime2;
-            }
-        }
-        if (temperature >= 15 && temperature <= 18)
-            display.drawBitmap(0, 0, progiconsCold[currentFrames2], 128, 64, SSD1306_WHITE);
-        if (temperature >= -5 && temperature <= 14)
-            display.drawBitmap(0, 0, progiconsFreeze[currentFrames2], 128, 64, SSD1306_WHITE);
-        if (temperature >= 28 && temperature <= 40)
-            display.drawBitmap(0, 0, progiconsHot[currentFrames2], 128, 64, SSD1306_WHITE);
-
-        display.drawRoundRect(5, 16, 10, 40, 10, SSD1306_WHITE);
-        display.fillRoundRect(5, 46, 10, 10, 10, SSD1306_WHITE);
-
-        display.drawRoundRect(25, 16, 10, 40, 10, SSD1306_WHITE);
-        display.drawRoundRect(25, 16, 10, 40, 10, SSD1306_WHITE);
-
-        display.drawRoundRect(45, 16, 10, 40, 10, SSD1306_WHITE);
-        display.drawRoundRect(65, 16, 10, 40, 10, SSD1306_WHITE);
-
         currentFrames2++;
         if (currentFrames2 >= 3)
             currentFrames2 = 0;
     }
-    else
+
+    if (temperature >= 19 && temperature <= 27)
     {
-        display.drawRoundRect(5, 16, 10, 40, 10, SSD1306_WHITE);
-        display.fillRoundRect(5, 46, 10, 10, 10, SSD1306_WHITE);
-
-        display.drawRoundRect(25, 16, 10, 40, 10, SSD1306_WHITE);
-        display.drawRoundRect(25, 16, 10, 40, 10, SSD1306_WHITE);
-
-        display.drawRoundRect(45, 16, 10, 40, 10, SSD1306_WHITE);
-        display.drawRoundRect(65, 16, 10, 40, 10, SSD1306_WHITE);
-
-        if (temperature >= 19 && temperature <= 27)
+        display.drawBitmap(0, 0, progiconsSun[currentFrames2], 128, 64, SSD1306_WHITE);
+        if (currentTime2 - HPtime >= 300000)
         {
-            display.drawBitmap(0, 0, progiconsSun[currentFrames2], 128, 64, SSD1306_WHITE);
-            if (currentTime2 - HPtime >= 300000)
-            {
-                healthpoints--;
-                sleeppoints--;
-                HPtime = currentTime2;
-            }
+            healthpoints -= 5;
+            sleeppoints -= 5;
+            hungrypoints -= 5;
+            playpoints -= 5;
+            HPtime = currentTime2;
         }
-        if (temperature >= 15 && temperature <= 18)
-            display.drawBitmap(0, 0, progiconsCold[currentFrames2], 128, 64, SSD1306_WHITE);
-        if (temperature >= -5 && temperature <= 14)
-            display.drawBitmap(0, 0, progiconsFreeze[currentFrames2], 128, 64, SSD1306_WHITE);
-        if (temperature >= 28 && temperature <= 40)
-            display.drawBitmap(0, 0, progiconsHot[currentFrames2], 128, 64, SSD1306_WHITE);
     }
+    else if (temperature >= 15 && temperature <= 18)
+    {
+        display.drawBitmap(0, 0, progiconsCold[currentFrames2], 128, 64, SSD1306_WHITE);
+    }
+    else if (temperature >= -5 && temperature <= 14)
+    {
+        display.drawBitmap(0, 0, progiconsFreeze[currentFrames2], 128, 64, SSD1306_WHITE);
+        if (currentTime2 - HPtime >= 300000)
+        {
+            healthpoints -= 5;
+            sleeppoints -= 5;
+            hungrypoints -= 7;
+            playpoints += 2;
+            HPtime = currentTime2;
+        }
+    }
+    else if (temperature >= 28 && temperature <= 40)
+    {
+        display.drawBitmap(0, 0, progiconsHot[currentFrames2], 128, 64, SSD1306_WHITE);
+        if (currentTime2 - HPtime >= 300000)
+        {
+            healthpoints -= 10;
+            sleeppoints -= 10;
+            hungrypoints -= 5;
+            playpoints -= 5;
+            HPtime = currentTime2;
+        }
+    }
+
+    display.drawRoundRect(5, 16, 10, 40, 5, SSD1306_WHITE);  // Health
+    display.drawRoundRect(25, 16, 10, 40, 5, SSD1306_WHITE); // Hunger
+    display.drawRoundRect(45, 16, 10, 40, 5, SSD1306_WHITE); // Joy
+    display.drawRoundRect(65, 16, 10, 40, 5, SSD1306_WHITE); // Sleep
+
+    int barHeightHealth = map(healthpoints, 0, 100, 0, 40);
+    int barYHealth = 16 + (40 - barHeightHealth);
+    display.fillRoundRect(5, barYHealth, 10, barHeightHealth, 5, SSD1306_WHITE);
+
+    // HUNGER BAR
+    int barHeightHunger = map(hungrypoints, 0, 100, 0, 40);
+    int barYHunger = 16 + (40 - barHeightHunger);
+    display.fillRoundRect(25, barYHunger, 10, barHeightHunger, 5, SSD1306_WHITE);
+
+    // JOY BAR
+    int barHeightJoy = map(playpoints, 0, 100, 0, 40);
+    int barYJoy = 16 + (40 - barHeightJoy);
+    display.fillRoundRect(45, barYJoy, 10, barHeightJoy, 5, SSD1306_WHITE);
+
+    // SLEEP BAR
+    int barHeightSleep = map(sleeppoints, 0, 100, 0, 40);
+    int barYSleep = 16 + (40 - barHeightSleep);
+    display.fillRoundRect(65, barYSleep, 10, barHeightSleep, 5, SSD1306_WHITE);
+
     display.display();
 }
 
@@ -653,14 +1159,14 @@ void stats()
     {
         display.println("How to: Health");
         display.setCursor(0, 16);
-        display.println("You can fill up Void's Health bar by giving him a shower and keeping him well fed.");
+        display.println("You can fill up Void's Health bar by petting him and keeping him well fed.");
         display.setCursor(0, 0);
     }
     else if (infoPage == 2)
     {
         display.println("How to: Hunger");
         display.setCursor(0, 16);
-        display.println("You can fill up Void's Hunger bar by interacting with the human touch sensor. He feeds off souls.");
+        display.println("You can fill up Void's Hunger bar by feeding him in the kitchen.");
         display.setCursor(0, 0);
     }
     else if (infoPage == 3)
