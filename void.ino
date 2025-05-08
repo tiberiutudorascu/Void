@@ -306,28 +306,23 @@ void loop()
         Serial.println(page);
         lastPage = page;
     }
-    static bool wasOnPage0 = false;
     if (page == 0)
-    {
-        if (!wasOnPage0)
-        {
-            currentFrames = 0;
-            wasOnPage0 = true;
-        }
+    {     
         if (currentMode == IDLE)
-            idle();
+        {if (lastPage!=0)
+            currentFrames = 0;
+            idle();}
         else if (currentMode == CUTE)
             cute(healthpoints);
         else if (currentMode == ANGRY)
             angry(healthpoints);
         else if (currentMode == SLEEP)
             sleepy(sleeppoints);
-        else if (currentMode == PLAY)
+        else if (currentMode == PLAY){
+          if (lastPage!=0)
+            currentFrames = 0;
             idleplay(playpoints);
-    }
-    else
-    {
-        wasOnPage0 = false;
+        }
     }
     if (page == 1)
     {
@@ -380,20 +375,25 @@ void loop()
         lastTempCheck = currentMillis;
     }
 }
-void idle()
-{
-    unsigned long currentTime = millis();
-    if (currentTime - previousTime >= framestime[currentFrames])
-    {
-        previousTime = currentTime;
+void idle() {
+    unsigned long now = millis();
+    if (now - previousTime >= framestime[currentFrames]) {
+        previousTime = now;
+
         display.clearDisplay();
         display.drawBitmap(0, 0, frames[currentFrames], 128, 64, SSD1306_WHITE);
         display.display();
+
         currentFrames++;
-        if (currentFrames >= totalFrames)
-            currentFrames = 0;
+        if (currentFrames == 60) {
+            currentFrames = 0;      
+        }
+
+        Serial.print("Frame ");
+        Serial.println(currentFrames);
     }
 }
+
 void idleplay(int &playpoints)
 {
     unsigned long currentTime = millis();
@@ -427,9 +427,10 @@ void idleplay(int &playpoints)
                 playpoints += 8;
             }
         }
-
+  if (playpoints > 100)
+        playpoints = 100;
         currentFrames++;
-        if (currentFrames >= totalFrames)
+        if (currentFrames >= 60)
             currentFrames = 0;
 
         display.display();
